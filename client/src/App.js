@@ -86,14 +86,14 @@ int main() {
         try {
             let detectedLang = sourceLanguage;
             if (sourceLanguage === 'Unknown') {
-                const detectResponse = await axios.post('http://localhost:5000/api/guest/detect-language', {
+                const detectResponse = await axios.post('${process.env.REACT_APP_API_URL}/api/guest/detect-language', {
                     code: code
                 });
                 detectedLang = detectResponse.data.language;
                 setSourceLanguage(detectedLang);
             }
 
-            const response = await axios.post('http://localhost:5000/api/guest/transform', {
+            const response = await axios.post('${process.env.REACT_APP_API_URL}/api/guest/transform', {
                 code: code,
                 sourceLanguage: detectedLang,
                 targetLanguage: targetLanguage
@@ -123,7 +123,7 @@ const handleDownload = async (format) => {
 
         try {
             const response = await axios.post(
-                `http://localhost:5000/api/download/guest/${format}`,
+                `${process.env.REACT_APP_API_URL}/api/download/guest/${format}`,
                 {
                     originalCode: code,
                     transformedCode: result.transformed,
