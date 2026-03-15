@@ -259,14 +259,15 @@ router.get('/:project_id/migrations', authMiddleware, async (req, res) => {
         const migrations = await dbAll(`
             SELECT 
                 m.*,
-                e.explanation_text,
-                e.summary_text,
+                e.explanation_text AS explanation,
+                e.summary_text AS summary,
                 cf.original_code,
-                cf.detected_language
+                cf.detected_language AS source_language
             FROM migrations m
             LEFT JOIN explanations e ON m.migration_id = e.migration_id
             LEFT JOIN code_files cf ON m.project_id = cf.project_id
             WHERE m.project_id = ?
+            GROUP BY m.migration_id
             ORDER BY m.created_at DESC
         `, [project_id]);
         
