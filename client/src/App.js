@@ -12,6 +12,8 @@ import Dashboard from './components/Dashboard/Dashboard';
 import ProjectView from './components/Projects/ProjectView';
 import PrivateRoute from './components/PrivateRoute';
 
+const MAX_GUEST_TRIES = 5;
+
 // Guest Mode Component with Real API Integration
 function GuestMode() {
     const [code, setCode] = React.useState('');
@@ -20,6 +22,16 @@ function GuestMode() {
     const [result, setResult] = React.useState(null);
     const [loading, setLoading] = React.useState(false);
     const [showSamples, setShowSamples] = React.useState(true);
+
+    // 5-try limit
+    const [triesLeft, setTriesLeft] = React.useState(() => {
+        const used = parseInt(localStorage.getItem('guestTries') || '0');
+        return MAX_GUEST_TRIES - used;
+    });
+    const [limitReached, setLimitReached] = React.useState(() => {
+        const used = parseInt(localStorage.getItem('guestTries') || '0');
+        return used >= MAX_GUEST_TRIES;
+    });
 
     const sampleCodes = {
         factorial: `#include <stdio.h>
@@ -80,7 +92,14 @@ int main() {
             toast.error('Please enter some code to transform!');
             return;
         }
-        
+
+        // Check try limit before calling API
+        const used = parseInt(localStorage.getItem('guestTries') || '0');
+        if (used >= MAX_GUEST_TRIES) {
+            setLimitReached(true);
+            setTriesLeft(0);
+            return;
+        }
 
         setLoading(true);
         try {
@@ -99,11 +118,17 @@ int main() {
                 targetLanguage: targetLanguage
             });
 
+            // Increment try count only on success
+            const newUsed = used + 1;
+            localStorage.setItem('guestTries', newUsed.toString());
+            const remaining = MAX_GUEST_TRIES - newUsed;
+            setTriesLeft(remaining);
+            if (remaining <= 0) setLimitReached(true);
+
             setResult({
                 original: code,
                 transformed: response.data.transformedCode,
                 explanation: response.data.explanation,
-                message: '✨ Transformation complete! Sign up to save your work.'
             });
 
             toast.success('Code transformed successfully!');
@@ -115,43 +140,56 @@ int main() {
             setLoading(false);
         }
     };
-const handleDownload = async (format) => {
-        if (!result) {
-            toast.error('No transformation to download!');
-            return;
-        }
 
-        try {
-            const response = await axios.post(
-                `http://localhost:5000/api/download/guest/${format}`,
-                {
-                    originalCode: code,
-                    transformedCode: result.transformed,
-                    sourceLanguage: sourceLanguage,
-                    targetLanguage: targetLanguage
-                },
-                {
-                    responseType: 'blob'
-                }
-            );
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            
-            const ext = format === 'txt' ? 'txt' : format === 'pdf' ? 'pdf' : 'docx';
-            link.setAttribute('download', `code-transformation-${Date.now()}.${ext}`);
-            
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            
-            toast.success(`Downloaded as ${format.toUpperCase()}!`);
-        } catch (error) {
-            console.error('Download error:', error);
-            toast.error('Failed to download file');
-        }
-    };
+    // Show limit reached wall
+    if (limitReached) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+                <div style={{
+                    background: 'white', borderRadius: '24px', padding: '48px',
+                    maxWidth: '480px', width: '90%', textAlign: 'center',
+                    boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
+                }}>
+                    <div style={{ fontSize: '3.5rem', marginBottom: '16px' }}>🔒</div>
+                    <h2 style={{ color: '#333', fontWeight: '800', marginBottom: '12px' }}>
+                        You've used all 5 free tries!
+                    </h2>
+                    <p style={{ color: '#666', marginBottom: '8px', lineHeight: '1.6' }}>
+                        Create a <strong>free account</strong> to get unlimited migrations,
+                        save your projects, and download results.
+                    </p>
+                    <p style={{ color: '#999', fontSize: '0.85rem', marginBottom: '32px' }}>
+                        It only takes 30 seconds to sign up.
+                    </p>
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <a href="/register" style={{
+                            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                            color: 'white', padding: '14px 32px', borderRadius: '12px',
+                            textDecoration: 'none', fontWeight: '600', fontSize: '1rem',
+                            boxShadow: '0 4px 15px rgba(102,126,234,0.4)'
+                        }}>
+                            🚀 Create Free Account
+                        </a>
+                        <a href="/login" style={{
+                            background: 'transparent', color: '#667eea',
+                            padding: '14px 24px', borderRadius: '12px',
+                            textDecoration: 'none', fontWeight: '500',
+                            border: '2px solid #667eea'
+                        }}>
+                            Login
+                        </a>
+                    </div>
+                    <p style={{ color: '#bbb', fontSize: '0.78rem', marginTop: '24px' }}>
+                        Already have an account? <a href="/login" style={{ color: '#667eea' }}>Log in</a> to continue.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8f9fa' }}>
@@ -160,8 +198,17 @@ const handleDownload = async (format) => {
                     <a className="navbar-brand" href="/" style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>
                         🚀 CoreShift
                     </a>
-                    <div>
-                        <a href="/register" className="btn btn-success btn-sm me-2">Sign Up (Optional)</a>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {/* Try counter badge */}
+                        <span style={{
+                            background: triesLeft <= 2 ? 'rgba(255,80,80,0.25)' : 'rgba(255,255,255,0.15)',
+                            border: triesLeft <= 2 ? '1px solid rgba(255,80,80,0.5)' : '1px solid rgba(255,255,255,0.3)',
+                            color: 'white', padding: '5px 12px', borderRadius: '20px',
+                            fontSize: '0.82rem', fontWeight: '500'
+                        }}>
+                            {triesLeft <= 2 ? '⚠️' : '✨'} {triesLeft} free {triesLeft === 1 ? 'try' : 'tries'} left
+                        </span>
+                        <a href="/register" className="btn btn-success btn-sm">Sign Up Free</a>
                         <a href="/login" className="btn btn-outline-light btn-sm">Login</a>
                     </div>
                 </div>
@@ -171,10 +218,14 @@ const handleDownload = async (format) => {
                 {showSamples ? (
                     <div className="text-center mb-5">
                         <h1 className="display-4 fw-bold mb-3" style={{color: '#667eea'}}>
-                            Try CoreShift - No Signup Required!
+                            Try CoreShift Free
                         </h1>
-                        <p className="lead text-muted mb-5">
+                        <p className="lead text-muted mb-2">
                             Choose a sample code below to see real AI transformation in action
+                        </p>
+                        <p className="text-muted mb-5" style={{ fontSize: '0.9rem' }}>
+                            ✨ <strong>{triesLeft} free {triesLeft === 1 ? 'transformation' : 'transformations'}</strong> remaining
+                            {' '}— <a href="/register">sign up</a> for unlimited access
                         </p>
 
                         <div className="row mb-4">
@@ -208,7 +259,7 @@ const handleDownload = async (format) => {
                         </div>
 
                         <div className="text-center">
-                            <button 
+                            <button
                                 className="btn btn-outline-primary btn-lg"
                                 onClick={() => setShowSamples(false)}
                             >
@@ -221,8 +272,11 @@ const handleDownload = async (format) => {
                         <div className="text-center mb-4">
                             <h2 style={{color: '#667eea'}}>Transform Your Code</h2>
                             <p className="text-muted">
-                                Using real AI (Groq Llama 3.3) • Want to save? 
-                                <a href="/register" className="ms-2">Sign up for free!</a>
+                                Using real AI (Groq Llama 3.3) •{' '}
+                                <span style={{ color: triesLeft <= 2 ? '#dc3545' : '#666' }}>
+                                    <strong>{triesLeft}</strong> free {triesLeft === 1 ? 'try' : 'tries'} remaining
+                                </span>
+                                {' '}• <a href="/register">Sign up for unlimited</a>
                             </p>
                         </div>
 
@@ -250,7 +304,7 @@ const handleDownload = async (format) => {
                                             placeholder="Paste your C, C++, or Java code here..."
                                             style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}
                                         />
-                                        <button 
+                                        <button
                                             className="btn btn-link mt-2"
                                             onClick={() => {
                                                 setShowSamples(true);
@@ -280,39 +334,22 @@ const handleDownload = async (format) => {
                                                     readOnly
                                                     style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}
                                                 />
-                                                       <div className="mt-3 p-3 bg-light rounded">
-            <h6 className="mb-3 fw-bold">📥 Download Transformed Code:</h6>
-            <div className="btn-group" role="group">
-                <button 
-                    className="btn btn-danger btn-sm"
-                    onClick={() => handleDownload('pdf')}
-                >
-                    📄 PDF
-                </button>
-                <button 
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleDownload('docx')}
-                >
-                    📝 Word
-                </button>
-                <button 
-                    className="btn btn-success btn-sm"
-                    onClick={() => handleDownload('txt')}
-                >
-                    📋 Text
-                </button>
-            </div>
-            <p className="text-muted small mb-0 mt-2">
-                Download in your preferred format for documentation
-            </p>
-        </div>
-
-        <div className="alert alert-info mt-3">
-            {result.message}
-        </div>
-    
-                                                <div className="alert alert-info mt-3">
-                                                    {result.message}
+                                                {/* Sign up prompt instead of download buttons */}
+                                                <div style={{
+                                                    marginTop: '16px', padding: '16px',
+                                                    background: 'linear-gradient(135deg, #667eea22, #764ba222)',
+                                                    border: '1px solid #667eea44',
+                                                    borderRadius: '12px', textAlign: 'center'
+                                                }}>
+                                                    <p style={{ color: '#555', marginBottom: '10px', fontSize: '0.9rem' }}>
+                                                        💾 Want to <strong>save, download, and manage</strong> your migrations?
+                                                    </p>
+                                                    <a href="/register" className="btn btn-primary btn-sm me-2">
+                                                        🚀 Create Free Account
+                                                    </a>
+                                                    <a href="/login" className="btn btn-outline-secondary btn-sm">
+                                                        Login
+                                                    </a>
                                                 </div>
                                             </>
                                         ) : (
@@ -335,7 +372,7 @@ const handleDownload = async (format) => {
                                 <div className="row align-items-center">
                                     <div className="col-md-6">
                                         <label className="form-label fw-bold">Target Language:</label>
-                                        <select 
+                                        <select
                                             className="form-select"
                                             value={targetLanguage}
                                             onChange={(e) => setTargetLanguage(e.target.value)}
@@ -350,7 +387,7 @@ const handleDownload = async (format) => {
                                         </select>
                                     </div>
                                     <div className="col-md-6 text-end">
-                                        <button 
+                                        <button
                                             className="btn btn-success btn-lg pulse-button"
                                             onClick={handleTransform}
                                             disabled={loading || !code.trim()}
@@ -361,7 +398,7 @@ const handleDownload = async (format) => {
                                                     Transforming...
                                                 </>
                                             ) : (
-                                                '🚀 Transform Code'
+                                                `🚀 Transform Code (${triesLeft} left)`
                                             )}
                                         </button>
                                     </div>
@@ -369,10 +406,18 @@ const handleDownload = async (format) => {
                             </div>
                         </div>
 
+                        {/* Warning when tries are low */}
+                        {triesLeft <= 2 && (
+                            <div className="alert alert-danger text-center">
+                                <strong>⚠️ Only {triesLeft} free {triesLeft === 1 ? 'try' : 'tries'} remaining!</strong>{' '}
+                                <a href="/register" className="alert-link">Create a free account</a> for unlimited migrations.
+                            </div>
+                        )}
+
                         <div className="alert alert-warning text-center">
-                            <strong>💡 Guest Mode:</strong> Transformations are not saved. 
-                            <a href="/register" className="alert-link ms-2">Create a free account</a> 
-                            to save and manage your projects!
+                            <strong>💡 Guest Mode:</strong> Transformations are not saved.{' '}
+                            <a href="/register" className="alert-link">Create a free account</a>{' '}
+                            to save, download and manage your projects!
                         </div>
                     </>
                 )}
@@ -579,7 +624,7 @@ if __name__ == "__main__":
     );
 }
 
-// About Page - COMPLETE WITH WHITE BACKGROUND
+// About Page
 function AboutPage() {
     return (
         <div style={{ backgroundColor: '#ffffff', minHeight: '100vh' }}>
@@ -727,7 +772,7 @@ function AboutPage() {
     );
 }
 
-// How It Works Page - COMPLETE WITH WHITE BACKGROUND
+// How It Works Page
 function HowItWorksPage() {
     return (
         <div style={{ backgroundColor: '#ffffff', minHeight: '100vh' }}>
@@ -764,7 +809,7 @@ function HowItWorksPage() {
                                     <li>Click <strong>"Try Now"</strong> on homepage</li>
                                     <li>Choose from <strong>sample codes</strong> to see how it works</li>
                                     <li>Or paste your own C, C++, or Java code</li>
-                                    <li>No account needed to try!</li>
+                                    <li>No account needed for first 5 tries!</li>
                                 </ul>
                             </div>
                         </div>
@@ -828,8 +873,8 @@ function HowItWorksPage() {
 function App() {
     return (
         <Router>
-            <ToastContainer 
-                position="bottom-right" 
+            <ToastContainer
+                position="bottom-right"
                 autoClose={3000}
                 hideProgressBar={false}
                 newestOnTop
