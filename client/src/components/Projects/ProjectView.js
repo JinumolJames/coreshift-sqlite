@@ -49,13 +49,13 @@ function ProjectView() {
         try {
             const token = localStorage.getItem('token');
             const projectResponse = await axios.get(
-                `http://localhost:5000/api/projects/${id}`,
+                `https://coreshift-sqlite.onrender.com/projects/${id}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setProjectData(projectResponse.data);
 
             const migrationsResponse = await axios.get(
-                `http://localhost:5000/api/projects/${id}/migrations`,
+                `https://coreshift-sqlite.onrender.com/projects/${id}/migrations`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             const migrations = migrationsResponse.data;
@@ -146,7 +146,7 @@ function ProjectView() {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                `http://localhost:5000/api/download/${format}`,
+                `https://coreshift-sqlite.onrender.com/download/${format}`,
                 {
                     originalCode: code, transformedCode,
                     sourceLanguage: detectedLanguage, targetLanguage,
