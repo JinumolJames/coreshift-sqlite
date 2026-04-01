@@ -105,14 +105,14 @@ int main() {
         try {
             let detectedLang = sourceLanguage;
             if (sourceLanguage === 'Unknown') {
-                const detectResponse = await axios.post('http://localhost:5000/api/guest/detect-language', {
+                const detectResponse = await axios.post('https://coreshift-sqlite.onrender.com/guest/detect-language', {
                     code: code
                 });
                 detectedLang = detectResponse.data.language;
                 setSourceLanguage(detectedLang);
             }
 
-            const response = await axios.post('http://localhost:5000/api/guest/transform', {
+            const response = await axios.post('https://coreshift-sqlite.onrender.com//guest/transform', {
                 code: code,
                 sourceLanguage: detectedLang,
                 targetLanguage: targetLanguage
